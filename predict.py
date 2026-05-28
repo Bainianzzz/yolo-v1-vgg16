@@ -14,7 +14,6 @@ from pathlib import Path
 from urllib.request import urlretrieve
 
 import torch
-import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 from torchvision import transforms as T
 
@@ -85,8 +84,8 @@ def predict(
     pred_cls = preds[..., B * 5:]  # (1, S, S, C)
 
     xy = torch.sigmoid(pred_boxes[..., 0:2])  # (1, S, S, B, 2)
-    wh = pred_boxes[..., 2:4]                  # (1, S, S, B, 2)
-    conf = torch.sigmoid(pred_boxes[..., 4])   # (1, S, S, B)
+    wh = pred_boxes[..., 2:4] ** 2               # sqrt(w)->w, sqrt(h)->h
+    conf = torch.sigmoid(pred_boxes[..., 4])     # (1, S, S, B)
     cls_probs = torch.softmax(pred_cls, dim=-1)  # (1, S, S, C)
 
     # 转换 xy 到全图坐标
@@ -206,6 +205,8 @@ def draw_results(
 
 
 def main():
+    cuda_available = torch.cuda.is_available()
+
     parser = argparse.ArgumentParser(description="YOLOv1 单图推理")
     parser.add_argument("--checkpoint", type=str, default="checkpoints/yolov1_best.pth",
                         help="模型权重路径")
@@ -216,11 +217,16 @@ def main():
                         help="输出图片路径")
     parser.add_argument("--conf", type=float, default=0.3, help="置信度阈值")
     parser.add_argument("--iou", type=float, default=0.5, help="NMS IoU 阈值")
-    parser.add_argument("--device", type=str, default="cpu", help="推理设备")
+    parser.add_argument("--device", type=str,
+                        default="cuda" if cuda_available else "cpu", help="推理设备")
     parser.add_argument("--image-size", type=int, default=448, help="模型输入尺寸")
     args = parser.parse_args()
 
-    device = torch.device(args.device if torch.cuda.is_available() else "cpu")
+    if args.device == "cuda" and not cuda_available:
+        print("警告: CUDA 不可用，回退到 CPU")
+        args.device = "cpu"
+
+    device = torch.device(args.device)
     print(f"使用设备: {device}")
 
     # ---- 加载模型 ----

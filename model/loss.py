@@ -83,7 +83,7 @@ class YOLOv1Loss(nn.Module):
             target_x_abs = (target_xy[..., 0:1] + cell_x) / self.S
             target_y_abs = (target_xy[..., 1:2] + cell_y) / self.S
 
-            pred_box = torch.cat([pred_x_abs, pred_y_abs, pred_wh], dim=-1)
+            pred_box = torch.cat([pred_x_abs, pred_y_abs, pred_wh ** 2], dim=-1)
             target_box = torch.cat([target_x_abs, target_y_abs, target_wh], dim=-1)
 
         ious = compute_iou(pred_box.view(-1, 4), target_box.view(-1, 4))
@@ -97,12 +97,11 @@ class YOLOv1Loss(nn.Module):
         noobj_mask = (1.0 - resp_mask)  # (N, S, S, B, 1)
 
         # ---- 坐标损失 ----
+        # xy: sigmoid 输出与 [0,1) target 做 MSE
+        # wh: 模型直接预测 sqrt(w), sqrt(h)，训练时与 target 的 sqrt 对比
         coord_loss = self.lambda_coord * (
             self.mse(resp_mask * pred_xy, resp_mask * target_xy) +
-            self.mse(
-                resp_mask * torch.sign(pred_wh) * torch.sqrt(torch.abs(pred_wh) + 1e-6),
-                resp_mask * torch.sqrt(target_wh + 1e-6),
-            )
+            self.mse(resp_mask * pred_wh, resp_mask * torch.sqrt(target_wh + 1e-6))
         )
 
         # ---- 置信度损失 ----

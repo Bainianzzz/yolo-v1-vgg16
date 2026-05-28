@@ -73,7 +73,7 @@ def cellboxes_to_boxes(predictions: torch.Tensor, S: int = 7, B: int = 2) -> tor
     pred_cls = predictions[..., B * 5:]  # (N, S, S, C)
 
     xy = torch.sigmoid(pred_boxes[..., 0:2])   # (N, S, S, B, 2)
-    wh = pred_boxes[..., 2:4]                   # (N, S, S, B, 2)
+    wh = pred_boxes[..., 2:4] ** 2               # sqrt(w)->w, sqrt(h)->h
     conf = torch.sigmoid(pred_boxes[..., 4:5])  # (N, S, S, B, 1)
 
     # 类别概率经过 softmax，每个 cell 共享
