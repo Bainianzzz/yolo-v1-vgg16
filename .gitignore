@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# Virtual environment
+.venv/
+
+# IDE
+.idea/
+
+# Training outputs
+checkpoints/
+*.pth
+
+# Dataset
+coco8/
+coco8.zip
+
+# Predict outputs
+input.jpg
+output.jpg
+
+# uv
+uv.lock
