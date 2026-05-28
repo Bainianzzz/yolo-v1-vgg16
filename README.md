@@ -27,6 +27,19 @@ pip install uv  # 或 curl -LsSf https://astral.sh/uv/install.sh | sh
 uv sync
 ```
 
+### SwanLab 配置
+
+训练过程使用 SwanLab 记录可视化曲线。首次使用需要登录：
+
+```bash
+# 登录 SwanLab
+uv run swanlab login
+```
+
+根据提示输入 API Key（从 [swanlab.cn/settings](https://swanlab.cn/settings) 获取，需注册账号）。
+
+之后训练时日志会自动上传，也可以在终端运行 `swanlab watch` 实时查看。
+
 ## 训练
 
 首次运行会自动下载 COCO8 数据集（约 430KB）。
