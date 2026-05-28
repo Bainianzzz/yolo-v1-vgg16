@@ -65,7 +65,7 @@ class YOLOv1Loss(nn.Module):
         # 哪些 cell 中有物体（confidence > 0）
         obj_mask = (target_conf > 0).float()     # (N, S, S, B, 1)
         # 哪个 cell 中有物体（任意一个 bbox 有物即可）
-        any_obj = obj_mask.amax(dim=3).unsqueeze(-1)  # (N, S, S, 1, 1)
+        any_obj = obj_mask.amax(dim=3)  # (N, S, S, 1)
 
         # ---- 计算 predicted IoU，确定负责的 bbox ----
         with torch.no_grad():
