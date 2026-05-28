@@ -5,6 +5,7 @@
 转换为 YOLOv1 训练目标格式 (7×7×90)。
 """
 
+import random
 from pathlib import Path
 
 import torch
@@ -61,6 +62,21 @@ def get_dataset_path(dataset_name: str = "coco128") -> Path:
         zf.extractall(ds_dir)
     zip_path.unlink()
 
+    # 处理嵌套情况: 如果解压后在 ds_dir/dataset_name/images 下，
+    # 则把内容提到 ds_dir 层
+    nested = ds_dir / dataset_name
+    if nested.exists() and (nested / "images").exists():
+        import shutil
+        for item in nested.iterdir():
+            dest = ds_dir / item.name
+            if dest.exists():
+                if dest.is_dir():
+                    shutil.rmtree(dest)
+                else:
+                    dest.unlink()
+            shutil.move(str(item), str(dest))
+        shutil.rmtree(nested)
+
     return ds_dir
 
 
@@ -68,17 +84,43 @@ class COCODataset(Dataset):
     """通用 YOLO 格式数据集 (coco8 / coco128 等)。"""
 
     def __init__(self, split: str = "train", dataset_name: str = "coco128",
-                 S: int = 7, B: int = 2, C: int = 80, image_size: int = 448):
+                 S: int = 7, B: int = 2, C: int = 80, image_size: int = 448,
+                 split_ratio: float = 0.8):
         self.S = S
         self.B = B
         self.C = C
         self.image_size = image_size
 
         root = get_dataset_path(dataset_name)
-        self.img_dir = root / "images" / split
-        self.label_dir = root / "labels" / split
+        img_root = root / "images"
 
-        self.img_paths = sorted(self.img_dir.glob("*.jpg"))
+        # 检测数据集结构 (可能为 train/val 或 train2017 等单目录)
+        if (img_root / split).exists():
+            # 标准 split 目录: images/train/, images/val/
+            self.img_dir = img_root / split
+            self.label_dir = root / "labels" / split
+        else:
+            # 单目录 (如 train2017): 自动按比例拆分
+            subdirs = [d for d in img_root.iterdir() if d.is_dir()]
+            if not subdirs:
+                raise FileNotFoundError(f"未找到图片目录: {img_root}")
+            src_dir = subdirs[0]
+            self.img_dir = src_dir
+            self.label_dir = root / "labels" / src_dir.name
+            self._split_ratio = split_ratio
+            self._split_name = split  # 'train' or 'val'
+
+        all_paths = sorted(self.img_dir.glob("*.jpg"))
+
+        # 如果是单目录自动拆分模式，按比例切分
+        if hasattr(self, "_split_ratio"):
+            split_idx = int(len(all_paths) * self._split_ratio)
+            if self._split_name == "train":
+                self.img_paths = all_paths[:split_idx]
+            else:
+                self.img_paths = all_paths[split_idx:]
+        else:
+            self.img_paths = all_paths
 
         self.transform = T.Compose([
             T.Resize((image_size, image_size)),
