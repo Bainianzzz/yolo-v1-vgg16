@@ -1,11 +1,12 @@
 """
 YOLOv1 训练脚本
 
-使用 COCO8 数据集，VGG16 作为 backbone，训练 YOLOv1 模型。
+使用 COCO128 数据集，VGG16 作为 backbone，训练 YOLOv1 模型。
 训练曲线通过 SwanLab 记录。
 
 Usage:
-    python train.py [--epochs 100] [--batch-size 1] [--lr 1e-4] [--device cpu]
+    python train.py [--epochs 100] [--batch-size 16] [--lr 1e-4]
+                    [--dataset coco128] [--device cuda] [--num-workers 4]
 """
 
 import argparse
@@ -89,20 +90,37 @@ def validate(
 
 
 def main():
+    cuda_available = torch.cuda.is_available()
+
     parser = argparse.ArgumentParser(description="Train YOLOv1 with VGG16 backbone")
     parser.add_argument("--epochs", type=int, default=100, help="训练轮数")
-    parser.add_argument("--batch-size", type=int, default=1, help="batch 大小")
+    parser.add_argument("--batch-size", type=int, default=16 if cuda_available else 1,
+                        help="batch 大小")
     parser.add_argument("--lr", type=float, default=1e-4, help="学习率")
-    parser.add_argument("--device", type=str, default="cpu", help="训练设备 (cpu / cuda)")
+    parser.add_argument("--dataset", type=str, default="coco128",
+                        help="数据集名 (coco8 / coco128)")
+    parser.add_argument("--device", type=str,
+                        default="cuda" if cuda_available else "cpu",
+                        help="训练设备 (cpu / cuda)")
+    parser.add_argument("--num-workers", type=int, default=4 if cuda_available else 0,
+                        help="DataLoader 进程数")
     parser.add_argument("--save-path", type=str, default="checkpoints",
                         help="模型保存目录")
     args = parser.parse_args()
 
-    device = torch.device(args.device if torch.cuda.is_available() else "cpu")
-    print(f"使用设备: {device}")
+    if args.device == "cuda" and not cuda_available:
+        print("警告: CUDA 不可用，回退到 CPU")
+        args.device = "cpu"
+
+    device = torch.device(args.device)
+    print(f"使用设备: {device}  |  数据集: {args.dataset}")
 
     # ---- 数据加载 ----
-    train_loader, val_loader = create_dataloaders(batch_size=args.batch_size)
+    train_loader, val_loader = create_dataloaders(
+        dataset_name=args.dataset,
+        batch_size=args.batch_size,
+        num_workers=args.num_workers,
+    )
     print(f"训练集: {len(train_loader.dataset)} 张图片, "
           f"验证集: {len(val_loader.dataset)} 张图片")
 
@@ -125,7 +143,7 @@ def main():
             "batch_size": args.batch_size,
             "learning_rate": args.lr,
             "backbone": "vgg16",
-            "dataset": "coco8",
+            "dataset": args.dataset,
             "image_size": 448,
         },
     )
@@ -159,12 +177,10 @@ def main():
             "val_loss": val_loss,
         }
 
-        # 每 10 轮保存一次
         if epoch % 10 == 0:
             torch.save(model_state, f"{args.save_path}/yolov1_epoch{epoch:03d}.pth")
             print(f"  -> 已保存周期检查点 (epoch={epoch})")
 
-        # 保存最佳模型
         if val_loss < best_val_loss:
             best_val_loss = val_loss
             torch.save(model_state, f"{args.save_path}/yolov1_best.pth")

@@ -213,16 +213,25 @@ def run_validation(
 
 
 def main():
+    cuda_available = torch.cuda.is_available()
+
     parser = argparse.ArgumentParser(description="Validate YOLOv1 model")
     parser.add_argument("--checkpoint", type=str, default="checkpoints/yolov1_best.pth",
                         help="模型检查点路径")
-    parser.add_argument("--device", type=str, default="cpu", help="设备")
+    parser.add_argument("--dataset", type=str, default="coco128",
+                        help="数据集名 (coco8 / coco128)")
+    parser.add_argument("--device", type=str,
+                        default="cuda" if cuda_available else "cpu", help="设备")
     parser.add_argument("--conf-threshold", type=float, default=0.4, help="置信度阈值")
     parser.add_argument("--iou-threshold", type=float, default=0.5, help="IoU 阈值")
     args = parser.parse_args()
 
-    device = torch.device(args.device if torch.cuda.is_available() else "cpu")
-    print(f"使用设备: {device}")
+    if args.device == "cuda" and not cuda_available:
+        print("警告: CUDA 不可用，回退到 CPU")
+        args.device = "cpu"
+
+    device = torch.device(args.device)
+    print(f"使用设备: {device}  |  数据集: {args.dataset}")
 
     # ---- 加载模型 ----
     backbone = VGG16Backbone(pretrained=False).to(device)
@@ -235,7 +244,7 @@ def main():
           f"val_loss={checkpoint['val_loss']:.4f}")
 
     # ---- 数据加载 ----
-    _, val_loader = create_dataloaders(batch_size=1)
+    _, val_loader = create_dataloaders(dataset_name=args.dataset, batch_size=1)
 
     # ---- 验证 ----
     mAP = run_validation(
